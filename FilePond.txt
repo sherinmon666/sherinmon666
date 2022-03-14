@@ -1,0 +1,128 @@
+  pondFiles = []
+
+  pondHandleInit() {
+
+  }
+
+  pondHandleAddFile(event: any) {
+    this.filevalidation(event.file.file);
+  }
+
+
+ pondOptions = {
+    class: 'my-filepond',
+    multiple: true,
+    labelIdle: 'Drop files here or browse',
+    acceptedFileTypes: 'sheet/xls,sheet/xlsx',
+    server: {
+
+      process: (fieldName, file, metadata, load, error, progress, abort, transfer, options) => {
+
+
+        // fieldName is the name of the input field
+        // file is the actual file object to send
+        console.log('File process begin', event);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('Feature', "AspectAnalysis");
+
+        let apiurl = window.location.origin + "/Aspect/invokeuploadapi";
+        const request = new XMLHttpRequest();
+        request.open('POST', apiurl);
+
+        // Should call the progress method to update the progress to 100% before calling load
+        // Setting computable to false switches the loading indicator to infinite mode
+        request.upload.onprogress = (e) => {
+          progress(e.lengthComputable, e.loaded, e.total);
+        };
+        // Should call the load method when done and pass the returned server file id
+        // this server file id is then used later on when reverting or restoring a file
+        // so your server knows which file to return without exposing that info to the client
+        request.onload = function () {
+          if (request.status >= 200 && request.status < 300) {
+            // the load method accepts either a string (id) or an object
+            load(request.responseText);
+            console.log(request.response.status);
+          }
+          else {
+            // Can call the error method if something is wrong, should exit after
+            error('oh no');
+          }
+        };
+        let this3 = this;
+        let filePondControl = this.myPond;
+        request.onloadend = (result) => {
+          setTimeout(() => {
+            clearInterval(this3.timerInterval);
+            var response = JSON.parse(request.response)
+            var status = response.status;
+            filePondControl.removeFile(file.id);
+            if (status == "Success") {
+              this3.toastr.success("Upload completed.", "CAASEY");
+              this.ClearItem();
+              this.apiResultTable1 = false;
+              this.apiResultTable2 = false;
+              this.getDocumentInformation(true);
+            } else {
+              this3.toastr.error(response.message, "CAASEY");
+              this.ClearItem();
+              this.apiResultTable1 = false;
+              this.apiResultTable2 = false;
+            }
+          }, 1000);
+
+        }
+
+        request.send(formData);
+        this.timerInterval = setInterval(() => {
+          this.ClearSessionTimer();
+        }, 10 * 60 * 1000);
+
+        // Should expose an abort method so the request can be cancelled
+        return {
+          abort: () => {
+            // This function is entered if the user has tapped the cancel button
+            request.abort();
+            // Let FilePond know the request has been cancelled
+            abort();
+          }
+        };
+      }
+    }
+  }
+
+
+filevalidation(file: any) {
+    let fileName = file.name;
+    let lastIndex = fileName.lastIndexOf(".");
+    let extension = fileName.substring(lastIndex, fileName.length);
+    extension = extension.toLowerCase();
+
+    this.validateMimeType(file, this.excelMimes, valid => {
+      if (!valid) {
+
+        this.toastr.error("Invalid file..", "CAASEY");
+        this.myPond.removeFile(file.id);
+        return;
+
+      }
+      else {
+        let validFile = false;
+        if (extension == ".xlsx" || extension == ".xls") {
+          validFile = true;
+        }
+
+        if (!validFile) {
+          this.toastr.error("Incorrect file format", "CAASEY");
+          this.myPond.removeFile(file.id);
+          return;
+        }
+        else if (file.size > 20 * 1024 * 1024) {
+          this.toastr.error("File size should be less than 20MB", "CAASEY");
+          this.myPond.removeFile(file.id);
+          return
+        }
+      }
+    });
+
+  }
